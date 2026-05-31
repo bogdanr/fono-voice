@@ -1,0 +1,4 @@
+# Models live as release assets, never in the git tree.
+*.ort
+*.onnx
+*.wav
