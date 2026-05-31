@@ -50,6 +50,70 @@ minted; older releases stay published so existing installs keep working. Models
 are re-converted **only** on such a bump (or when a voice is added) — not on any
 particular schedule.
 
+## Available voices
+
+The [`ort-1.24.2`](https://github.com/bogdanr/fono-voice/releases/tag/ort-1.24.2)
+release ships **42 [Piper](https://github.com/rhasspy/piper) voices across 38
+languages** — one default voice per language (a few languages carry extra
+regional variants, e.g. `en_US`/`en_GB`, `es_ES`/`es_AR`/`es_MX`,
+`nl_NL`/`nl_BE`). All are single-architecture Piper VITS models and load on the
+same minimal runtime.
+
+`⚠️` marks a **non-commercial** license — fine for personal/offline use, but
+check the upstream terms before any commercial deployment. The authoritative,
+machine-readable license for every voice is in [`manifest.json`](manifest.json).
+
+| Voice | Locale | Language | Quality | License |
+|---|---|---|---|---|
+| `ar_JO-kareem-medium` | ar_JO | Arabic | medium | See upstream MODEL_CARD |
+| `bg_BG-dimitar-medium` | bg_BG | Bulgarian | medium | CC0-1.0 |
+| `ca_ES-upc_ona-medium` | ca_ES | Catalan | medium | CC-BY-SA-4.0 |
+| `cs_CZ-jirka-medium` | cs_CZ | Czech | medium | CC0-1.0 |
+| `cy_GB-gwryw_gogleddol-medium` | cy_GB | Welsh | medium | See upstream MODEL_CARD |
+| `da_DK-talesyntese-medium` | da_DK | Danish | medium | CC0-1.0 |
+| `de_DE-thorsten-medium` | de_DE | German | medium | CC0-1.0 |
+| `en_GB-alan-medium` | en_GB | English | medium | See upstream MODEL_CARD |
+| `en_US-amy-medium` | en_US | English | medium | See upstream MODEL_CARD |
+| `es_AR-daniela-high` | es_AR | Spanish | high | CC-BY-SA-4.0 |
+| `es_ES-davefx-medium` | es_ES | Spanish | medium | CC0-1.0 |
+| `es_MX-ald-medium` | es_MX | Spanish | medium | CC0-1.0 |
+| `eu_ES-antton-medium` | eu_ES | Basque | medium | CC-BY-4.0 |
+| `fa_IR-amir-medium` | fa_IR | Farsi | medium | CC0-1.0 |
+| `fi_FI-harri-medium` | fi_FI | Finnish | medium | CC0-1.0 |
+| `fr_FR-siwis-medium` | fr_FR | French | medium | CC-BY-4.0 |
+| `hi_IN-pratham-medium` | hi_IN | Hindi | medium | CC-BY-NC-SA-4.0 ⚠️ |
+| `hu_HU-anna-medium` | hu_HU | Hungarian | medium | CC0-1.0 |
+| `it_IT-paola-medium` | it_IT | Italian | medium | See upstream MODEL_CARD |
+| `ka_GE-natia-medium` | ka_GE | Georgian | medium | See upstream MODEL_CARD |
+| `kk_KZ-issai-high` | kk_KZ | Kazakh | high | CC-BY-4.0 |
+| `ku_TR-berfin_renas-medium` | ku_TR | Kurmanji Kurdish | medium | CC-BY-NC-4.0 ⚠️ |
+| `lb_LU-marylux-medium` | lb_LU | Luxembourgish | medium | CC-BY-NC-SA-4.0 ⚠️ |
+| `lv_LV-aivars-medium` | lv_LV | Latvian | medium | CC0-1.0 |
+| `nl_BE-nathalie-medium` | nl_BE | Dutch | medium | CC0-1.0 |
+| `nl_NL-alex-medium` | nl_NL | Dutch | medium | CC0-1.0 |
+| `no_NO-talesyntese-medium` | no_NO | Norwegian | medium | CC0-1.0 |
+| `pl_PL-darkman-medium` | pl_PL | Polish | medium | CC0-1.0 |
+| `pt_PT-tugão-medium` | pt_PT | Portuguese | medium | CC0-1.0 |
+| `ro_RO-mihai-medium` | ro_RO | Romanian | medium | CC0-1.0 |
+| `ru_RU-denis-medium` | ru_RU | Russian | medium | CC0-1.0 |
+| `sk_SK-lili-medium` | sk_SK | Slovak | medium | CC0-1.0 |
+| `sl_SI-artur-medium` | sl_SI | Slovenian | medium | CC-BY-4.0 |
+| `sq_AL-edon-medium` | sq_AL | Albanian | medium | CC0-1.0 |
+| `sr_RS-serbski_institut-medium` | sr_RS | Serbian | medium | CC-BY-NC-SA-4.0 ⚠️ |
+| `sv_SE-alma-medium` | sv_SE | Swedish | medium | CC-BY-4.0 |
+| `sw_CD-lanfrica-medium` | sw_CD | Swahili | medium | See upstream MODEL_CARD |
+| `tr_TR-dfki-medium` | tr_TR | Turkish | medium | CC-BY-NC-SA-4.0 ⚠️ |
+| `uk_UA-ukrainian_tts-medium` | uk_UA | Ukrainian | medium | CC0-1.0 |
+| `ur_PK-fasih-medium` | ur_PK | Urdu | medium | MIT |
+| `vi_VN-vais1000-medium` | vi_VN | Vietnamese | medium | CC-BY-4.0 |
+| `zh_CN-chaowen-medium` | zh_CN | Chinese | medium | CC0-1.0 |
+
+> Some languages that Piper offers are intentionally **omitted** here because
+> their best voice uses ONNX control-flow operators (`If`) that the current
+> minimal runtime is not built with: Greek, Indonesian, Icelandic, Malayalam,
+> Nepali, Brazilian Portuguese (European `pt_PT` is included), and Telugu. They
+> can be added once the runtime's operator set is extended.
+
 ## Using these models — outside Fono
 
 You don't need Fono to use these. A `.ort` file is a standard ONNX Runtime
@@ -127,13 +191,28 @@ onnxruntime version, and compare.
 ## Licensing
 
 This repository **redistributes** third-party models; each carries **its own
-upstream license**, recorded per-voice in `manifest.json`:
+upstream license**, taken from the voice's upstream Piper `MODEL_CARD` and
+recorded per-voice in `manifest.json`. There is **no single license** — the
+current `ort-1.24.2` voices break down as:
 
-| Family | License | Upstream |
+| License | Voices | Commercial use |
 |---|---|---|
-| Piper voices | **GPL-3.0-or-later** | [`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices) |
-| Kokoro | Apache-2.0 | [`hexgrad/Kokoro-82M`](https://huggingface.co/hexgrad/Kokoro-82M) |
-| Silero / Zipformer / KWS (planned) | Apache-2.0 / MIT | per model |
+| CC0-1.0 (public domain) | 21 | yes |
+| CC-BY-4.0 | 6 | yes, with attribution |
+| CC-BY-SA-4.0 | 2 | yes, with attribution + share-alike |
+| MIT | 1 | yes |
+| CC-BY-NC-SA-4.0 | 4 | **non-commercial only** ⚠️ |
+| CC-BY-NC-4.0 | 1 | **non-commercial only** ⚠️ |
+| See upstream MODEL_CARD | 7 | check the linked dataset URL |
+
+The five `⚠️` non-commercial voices are listed in the voice table above. The
+upstream families:
+
+| Family | Upstream |
+|---|---|
+| Piper voices | [`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices) |
+| Kokoro (planned) | [`hexgrad/Kokoro-82M`](https://huggingface.co/hexgrad/Kokoro-82M) — Apache-2.0 |
+| Silero / Zipformer / KWS (planned) | per model (Apache-2.0 / MIT) |
 
 Conversion to `.ort` is a format change only; it does not alter the model's
 license. The **original text** in this repo (this README, `manifest.json`,
