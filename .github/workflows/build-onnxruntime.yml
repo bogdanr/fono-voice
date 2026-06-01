@@ -1,0 +1,215 @@
+# Build the minimal static ONNX Runtime libraries Fono links into its binary.
+#
+# Why this lives in fono-voice (not the fono app repo): the produced
+# `libonnxruntime.a` / `onnxruntime.lib` are large, change only when the
+# `ort` pin or the model op-set changes (a few times a year), and are hosted
+# here alongside the `.ort` voice models and espeak dicts they pair with. The
+# fono release CI and contributor builds only ever *download* these via
+# scripts/fetch-onnxruntime.sh — they never compile onnxruntime.
+#
+# This workflow builds one static library per target triple from source
+# (auditable provenance), using the same scripts/build-onnxruntime-minimal.sh
+# that ships in the fono repo, driven by the vendored onnxruntime/ops.config
+# (platform-independent: the op-set comes from the models, not the CPU). Each
+# library is xz-compressed and uploaded to the `release_tag` release using the
+# workflow's own GITHUB_TOKEN — no cross-repo secret.
+#
+# Run it manually from the Actions tab (workflow_dispatch) after bumping the
+# ort pin or adding a model with new operators. After it completes, copy the
+# printed per-triple SHA-256 of the *extracted* archive into the SHA table in
+# the fono repo's scripts/fetch-onnxruntime.sh.
+name: build-onnxruntime
+
+on:
+  workflow_dispatch:
+    inputs:
+      ort_version:
+        description: "onnxruntime version (MUST match the ort-sys ABI, e.g. 1.24.2)"
+        required: true
+        default: "1.24.2"
+      release_tag:
+        description: "fono-voice release tag to publish the libraries to"
+        required: true
+        default: "onnxruntime-1.24.2"
+      fono_ref:
+        description: "fono git ref to take the build script from"
+        required: true
+        default: "main"
+
+permissions:
+  contents: write # upload assets to this repo's own releases
+
+jobs:
+  build:
+    name: ${{ matrix.triple }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            triple: x86_64-unknown-linux-gnu
+            os: unix
+          - runner: ubuntu-24.04-arm
+            triple: aarch64-unknown-linux-gnu
+            os: unix
+          - runner: macos-14
+            triple: aarch64-apple-darwin
+            os: unix
+          - runner: macos-13
+            triple: x86_64-apple-darwin
+            os: unix
+          - runner: windows-latest
+            triple: x86_64-pc-windows-msvc
+            os: windows
+    steps:
+      - name: Checkout fono-voice (ops.config + this workflow)
+        uses: actions/checkout@v4
+
+      - name: Checkout fono (read-only, for the build script)
+        uses: actions/checkout@v4
+        with:
+          repository: bogdanr/fono
+          ref: ${{ github.event.inputs.fono_ref }}
+          path: fono
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake ninja-build xz-utils
+
+      - name: Install build tooling (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja xz
+
+      - name: Install build tooling (Windows)
+        if: runner.os == 'Windows'
+        run: choco install xz -y
+
+      # --- Unix (Linux + macOS): drive the shared build script directly ------
+      # The script handles the archive merge per-OS (GNU ar on Linux,
+      # libtool -static on macOS) and writes $OUT_DIR/libonnxruntime.a.
+      - name: Build minimal onnxruntime (Unix)
+        if: matrix.os == 'unix'
+        env:
+          ORT_VERSION: ${{ github.event.inputs.ort_version }}
+          OPS_CONFIG: ${{ github.workspace }}/onnxruntime/ops.config
+          OUT_DIR: ${{ github.workspace }}/out
+        run: sh fono/scripts/build-onnxruntime-minimal.sh
+
+      # --- Windows: build.py runs natively, but the .sh merge step is POSIX-
+      # only, so do the MSVC `lib.exe /OUT` merge here in the workflow. -------
+      - name: Build minimal onnxruntime (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        env:
+          ORT_VERSION: ${{ github.event.inputs.ort_version }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $src   = "$env:GITHUB_WORKSPACE\ort-src"
+          $build = "$env:GITHUB_WORKSPACE\ort-build"
+          $ops   = "$env:GITHUB_WORKSPACE\onnxruntime\ops.config"
+          $out   = "$env:GITHUB_WORKSPACE\out"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          git clone --depth 1 --branch "v$env:ORT_VERSION" --recurse-submodules --shallow-submodules `
+            https://github.com/microsoft/onnxruntime.git $src
+
+          python "$src\tools\ci_build\build.py" `
+            --build_dir $build `
+            --config MinSizeRel `
+            --parallel `
+            --skip_tests `
+            --compile_no_warning_as_error `
+            --minimal_build `
+            --disable_ml_ops `
+            --disable_rtti `
+            --enable_reduced_operator_type_support `
+            --include_ops_by_config $ops `
+            --use_xnnpack `
+            --cmake_extra_defines CMAKE_SKIP_INSTALL_RULES=ON `
+            --cmake_extra_defines FETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER
+
+          # Merge every static .lib the build emitted into one onnxruntime.lib.
+          $libs = Get-ChildItem -Path "$build\MinSizeRel\MinSizeRel" -Recurse -Filter *.lib |
+            Select-Object -ExpandProperty FullName
+          if (-not $libs) { throw "no .lib files found under $build" }
+          $libExe = (Get-Command lib.exe -ErrorAction SilentlyContinue)
+          if (-not $libExe) {
+            # Locate lib.exe from the VS toolchain if not already on PATH.
+            $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+            $vs = & $vswhere -latest -products * -find "VC\Tools\MSVC\*\bin\Hostx64\x64\lib.exe" | Select-Object -First 1
+            $libExe = $vs
+          }
+          & $libExe /OUT:"$out\onnxruntime.lib" @libs
+
+      # --- Compress + name the asset per scripts/fetch-onnxruntime.sh --------
+      - name: Compress and hash (Unix)
+        if: matrix.os == 'unix'
+        run: |
+          set -eu
+          cd out
+          raw_sha=$(shasum -a 256 libonnxruntime.a | cut -d' ' -f1)
+          raw_size=$(wc -c < libonnxruntime.a | tr -d ' ')
+          asset="libonnxruntime-${{ matrix.triple }}.a.xz"
+          xz -9 -k -c libonnxruntime.a > "$asset"
+          {
+            echo "triple=${{ matrix.triple }}"
+            echo "asset=$asset"
+            echo "raw_sha256=$raw_sha"
+            echo "raw_size=$raw_size"
+          } | tee "../sha-${{ matrix.triple }}.txt"
+
+      - name: Compress and hash (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-Location out
+          $raw = "onnxruntime.lib"
+          $rawSha = (Get-FileHash $raw -Algorithm SHA256).Hash.ToLower()
+          $rawSize = (Get-Item $raw).Length
+          $asset = "onnxruntime-${{ matrix.triple }}.lib.xz"
+          # Let xz do its own file I/O (-k keeps the input); a PowerShell
+          # pipeline is NOT byte-clean and would corrupt the archive.
+          xz -9 -k $raw
+          Move-Item -Force "$raw.xz" $asset
+          @(
+            "triple=${{ matrix.triple }}",
+            "asset=$asset",
+            "raw_sha256=$rawSha",
+            "raw_size=$rawSize"
+          ) | Tee-Object -FilePath "..\sha-${{ matrix.triple }}.txt"
+
+      - name: Upload library to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.release_tag }}
+        shell: bash
+        run: |
+          set -eu
+          # Create the release on first run; --clobber replaces an existing
+          # asset of the same name so re-runs are idempotent.
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Minimal ONNX Runtime static libraries (${{ github.event.inputs.ort_version }})" \
+              --notes "Per-triple minimal \`libonnxruntime\` static libraries built from source by .github/workflows/build-onnxruntime.yml. Consumed by the fono build via scripts/fetch-onnxruntime.sh."
+          fi
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            out/*.xz "sha-${{ matrix.triple }}.txt"
+
+  summary:
+    name: SHA table
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remind to update fetch-onnxruntime.sh
+        run: |
+          echo "All per-triple libraries built and uploaded to '${{ github.event.inputs.release_tag }}'."
+          echo "Next: copy each triple's raw_sha256 (sha-<triple>.txt, attached to the release)"
+          echo "into the SHA table in the fono repo's scripts/fetch-onnxruntime.sh, then bump"
+          echo "the pinned ORT_VERSION there if it changed."
