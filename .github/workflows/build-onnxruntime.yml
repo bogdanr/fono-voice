@@ -78,6 +78,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      # onnxruntime's build.py and its reduced-operator tooling import these at
+      # config time. flatbuffers in particular is required by tools/python/util
+      # to parse the ops.config (`--include_ops_by_config`); without it the
+      # build dies with "cannot import name 'parse_config' from 'util'".
+      - name: Install Python build deps
+        run: python -m pip install --upgrade pip setuptools wheel packaging numpy sympy flatbuffers
+
       - name: Install build tooling (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake ninja-build xz-utils
