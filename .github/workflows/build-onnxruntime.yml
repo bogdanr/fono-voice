@@ -87,15 +87,11 @@ jobs:
 
       - name: Install build tooling (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake ninja-build xz-utils
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake ninja-build
 
       - name: Install build tooling (macOS)
         if: runner.os == 'macOS'
-        run: brew install cmake ninja xz
-
-      - name: Install build tooling (Windows)
-        if: runner.os == 'Windows'
-        run: choco install xz -y
+        run: brew install cmake ninja
 
       # --- Unix (Linux + macOS): drive the shared build script directly ------
       # The script handles the archive merge per-OS (GNU ar on Linux,
@@ -155,42 +151,32 @@ jobs:
           & $libExe /OUT:"$out\onnxruntime.lib" @libs
 
       # --- Compress + name the asset per scripts/fetch-onnxruntime.sh --------
-      - name: Compress and hash (Unix)
-        if: matrix.os == 'unix'
+      # Compress with Python's stdlib lzma (already installed on every runner)
+      # rather than an external xz CLI, whose package name differs per OS and
+      # is absent on the Windows runner. bash is available on all runners
+      # (Git bash on Windows), so a single step covers every platform.
+      - name: Compress and hash
+        shell: bash
         run: |
           set -eu
           cd out
-          raw_sha=$(shasum -a 256 libonnxruntime.a | cut -d' ' -f1)
-          raw_size=$(wc -c < libonnxruntime.a | tr -d ' ')
-          asset="libonnxruntime-${{ matrix.triple }}.a.xz"
-          xz -9 -k -c libonnxruntime.a > "$asset"
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            raw=onnxruntime.lib
+            asset="onnxruntime-${{ matrix.triple }}.lib.xz"
+          else
+            raw=libonnxruntime.a
+            asset="libonnxruntime-${{ matrix.triple }}.a.xz"
+          fi
+          # Explicit .close() guarantees the lzma stream is flushed.
+          python -c "import lzma,shutil; f=open('$raw','rb'); o=lzma.open('$asset','wb',preset=9); shutil.copyfileobj(f,o); o.close(); f.close()"
+          raw_sha=$(python -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$raw")
+          raw_size=$(python -c "import os,sys; print(os.path.getsize(sys.argv[1]))" "$raw")
           {
             echo "triple=${{ matrix.triple }}"
             echo "asset=$asset"
             echo "raw_sha256=$raw_sha"
             echo "raw_size=$raw_size"
           } | tee "../sha-${{ matrix.triple }}.txt"
-
-      - name: Compress and hash (Windows)
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          Set-Location out
-          $raw = "onnxruntime.lib"
-          $rawSha = (Get-FileHash $raw -Algorithm SHA256).Hash.ToLower()
-          $rawSize = (Get-Item $raw).Length
-          $asset = "onnxruntime-${{ matrix.triple }}.lib.xz"
-          # Let xz do its own file I/O (-k keeps the input); a PowerShell
-          # pipeline is NOT byte-clean and would corrupt the archive.
-          xz -9 -k $raw
-          Move-Item -Force "$raw.xz" $asset
-          @(
-            "triple=${{ matrix.triple }}",
-            "asset=$asset",
-            "raw_sha256=$rawSha",
-            "raw_size=$rawSize"
-          ) | Tee-Object -FilePath "..\sha-${{ matrix.triple }}.txt"
 
       - name: Upload library to the release
         env:
