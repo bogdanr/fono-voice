@@ -47,10 +47,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-latest
+          - runner: ubuntu-22.04
             triple: x86_64-unknown-linux-gnu
             os: unix
-          - runner: ubuntu-24.04-arm
+          - runner: ubuntu-22.04-arm
             triple: aarch64-unknown-linux-gnu
             os: unix
           - runner: macos-14
