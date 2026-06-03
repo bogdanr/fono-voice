@@ -56,7 +56,7 @@ jobs:
           - runner: macos-14
             triple: aarch64-apple-darwin
             os: unix
-          - runner: macos-13
+          - runner: macos-latest
             triple: x86_64-apple-darwin
             os: unix
           - runner: windows-latest
