@@ -35,6 +35,10 @@ on:
         description: "fono git ref to take the build script from"
         required: true
         default: "main"
+      only_triple:
+        description: "Build only this target triple (blank = all). Use to re-run one platform without clobbering the others."
+        required: false
+        default: ""
 
 permissions:
   contents: write # upload assets to this repo's own releases
@@ -42,6 +46,9 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.triple }}
+    # Skip every triple except the requested one when only_triple is set, so a
+    # single platform can be re-run without rebuilding/clobbering the rest.
+    if: ${{ github.event.inputs.only_triple == '' || github.event.inputs.only_triple == matrix.triple }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -59,7 +66,13 @@ jobs:
           - runner: macos-latest
             triple: x86_64-apple-darwin
             os: unix
-          - runner: windows-latest
+          # Pin to windows-2022 (VS2022 / v143 toolset). `windows-latest`
+          # rolls forward to newer images whose bundled CMake cannot
+          # auto-detect the installed Visual Studio, which fails configure
+          # with "could not find any instance of Visual Studio". Pinning the
+          # image plus passing an explicit --cmake_generator below makes the
+          # VS detection deterministic.
+          - runner: windows-2022
             triple: x86_64-pc-windows-msvc
             os: windows
     steps:
@@ -122,6 +135,11 @@ jobs:
           git clone --depth 1 --branch "v$env:ORT_VERSION" --recurse-submodules --shallow-submodules `
             https://github.com/microsoft/onnxruntime.git $src
 
+          # --cmake_generator is explicit: on newer runner images the default
+          # generator detection fails ("could not find any instance of Visual
+          # Studio"). "Visual Studio 17 2022" matches the v143 toolset on the
+          # windows-2022 image and keeps the multi-config build layout
+          # ($build\MinSizeRel\MinSizeRel\...) the merge step below expects.
           python "$src\tools\ci_build\build.py" `
             --build_dir $build `
             --config MinSizeRel `
@@ -134,6 +152,7 @@ jobs:
             --enable_reduced_operator_type_support `
             --include_ops_by_config $ops `
             --use_xnnpack `
+            --cmake_generator "Visual Studio 17 2022" `
             --cmake_extra_defines CMAKE_SKIP_INSTALL_RULES=ON `
             --cmake_extra_defines FETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER
 
