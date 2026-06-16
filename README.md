@@ -59,6 +59,15 @@ regional variants, e.g. `en_US`/`en_GB`, `es_ES`/`es_AR`/`es_MX`,
 `nl_NL`/`nl_BE`). All are single-architecture Piper VITS models and load on the
 same minimal runtime.
 
+It also ships **6 [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) English
+voices** (3 female + 1 male American, 1 female + 1 male British). Unlike Piper,
+all Kokoro voices share **one** model (`kokoro-v1.0-q8f16.ort`) and select a
+speaker through a small per-voice **`.style.bin`** voice pack (a `510×256` f32
+tensor, ~522 KB) — so adding a Kokoro voice costs one style pack, not a whole
+model. The style packs are byte-identical to the upstream
+[`onnx-community/Kokoro-82M-v1.0-ONNX`](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX)
+voice tensors.
+
 `⚠️` marks a **non-commercial** license — fine for personal/offline use, but
 check the upstream terms before any commercial deployment. The authoritative,
 machine-readable license for every voice is in [`manifest.json`](manifest.json).
@@ -107,6 +116,20 @@ machine-readable license for every voice is in [`manifest.json`](manifest.json).
 | `ur_PK-fasih-medium` | ur_PK | Urdu | medium | MIT |
 | `vi_VN-vais1000-medium` | vi_VN | Vietnamese | medium | CC-BY-4.0 |
 | `zh_CN-chaowen-medium` | zh_CN | Chinese | medium | CC0-1.0 |
+
+### Kokoro (English)
+
+All share `kokoro-v1.0-q8f16.ort` and carry a per-voice `.style.bin` voice pack.
+Licensed **Apache-2.0** (upstream [`hexgrad/Kokoro-82M`](https://huggingface.co/hexgrad/Kokoro-82M)).
+
+| Voice | Locale | Gender | Style pack |
+|---|---|---|---|
+| `af_heart` | en_US | female | `af_heart.style.bin` |
+| `af_bella` | en_US | female | `af_bella.style.bin` |
+| `af_nicole` | en_US | female | `af_nicole.style.bin` |
+| `am_michael` | en_US | male | `am_michael.style.bin` |
+| `bf_emma` | en_GB | female | `bf_emma.style.bin` |
+| `bm_lewis` | en_GB | male | `bm_lewis.style.bin` |
 
 > Some languages that Piper offers are intentionally **omitted** here because
 > their best voice uses ONNX control-flow operators (`If`) that the current
@@ -191,27 +214,29 @@ onnxruntime version, and compare.
 ## Licensing
 
 This repository **redistributes** third-party models; each carries **its own
-upstream license**, taken from the voice's upstream Piper `MODEL_CARD` and
-recorded per-voice in `manifest.json`. There is **no single license** — the
-current `ort-1.24.2` voices break down as:
+upstream license**, taken from the voice's upstream `MODEL_CARD` (Piper) or
+model card (Kokoro) and recorded per-voice in `manifest.json`. There is **no
+single license** — the current `ort-1.24.2` voices break down as:
 
 | License | Voices | Commercial use |
 |---|---|---|
 | CC0-1.0 (public domain) | 21 | yes |
 | CC-BY-4.0 | 6 | yes, with attribution |
 | CC-BY-SA-4.0 | 2 | yes, with attribution + share-alike |
+| Apache-2.0 | 6 | yes, with attribution |
 | MIT | 1 | yes |
 | CC-BY-NC-SA-4.0 | 4 | **non-commercial only** ⚠️ |
 | CC-BY-NC-4.0 | 1 | **non-commercial only** ⚠️ |
 | See upstream MODEL_CARD | 7 | check the linked dataset URL |
 
-The five `⚠️` non-commercial voices are listed in the voice table above. The
-upstream families:
+The six Apache-2.0 voices are the Kokoro English voices; the 42 others are
+Piper. The five `⚠️` non-commercial voices are listed in the voice table above.
+The upstream families:
 
 | Family | Upstream |
 |---|---|
 | Piper voices | [`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices) |
-| Kokoro (planned) | [`hexgrad/Kokoro-82M`](https://huggingface.co/hexgrad/Kokoro-82M) — Apache-2.0 |
+| Kokoro voices | [`hexgrad/Kokoro-82M`](https://huggingface.co/hexgrad/Kokoro-82M) — Apache-2.0 |
 | Silero / Zipformer / KWS (planned) | per model (Apache-2.0 / MIT) |
 
 Conversion to `.ort` is a format change only; it does not alter the model's
