@@ -44,37 +44,51 @@ permissions:
   contents: write # upload assets to this repo's own releases
 
 jobs:
+  # Compute the build matrix. When only_triple is set, the matrix is filtered
+  # to that one platform so a single triple can be re-run without rebuilding
+  # and clobbering the others' published assets. The matrix context is not
+  # available in a job-level `if:`, so filtering must happen here, not on the
+  # build job itself.
+  setup:
+    name: Compute matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - name: Build matrix (optionally filtered by only_triple)
+        id: gen
+        shell: bash
+        env:
+          ONLY: ${{ github.event.inputs.only_triple }}
+        run: |
+          set -eu
+          python3 - <<'PY' > matrix.json
+          import json, os
+          # windows-2022 pinned (VS2022 / v143 toolset): newer runner images'
+          # bundled CMake cannot auto-detect the installed Visual Studio.
+          all_entries = [
+              {"runner": "ubuntu-22.04",     "triple": "x86_64-unknown-linux-gnu",  "os": "unix"},
+              {"runner": "ubuntu-22.04-arm", "triple": "aarch64-unknown-linux-gnu", "os": "unix"},
+              {"runner": "macos-14",         "triple": "aarch64-apple-darwin",      "os": "unix"},
+              {"runner": "macos-latest",     "triple": "x86_64-apple-darwin",       "os": "unix"},
+              {"runner": "windows-2022",     "triple": "x86_64-pc-windows-msvc",    "os": "windows"},
+          ]
+          only = os.environ.get("ONLY", "").strip()
+          entries = [e for e in all_entries if not only or e["triple"] == only]
+          if not entries:
+              raise SystemExit(f"only_triple={only!r} matches no known triple")
+          print(json.dumps({"include": entries}))
+          PY
+          echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
+          cat matrix.json
+
   build:
     name: ${{ matrix.triple }}
-    # Skip every triple except the requested one when only_triple is set, so a
-    # single platform can be re-run without rebuilding/clobbering the rest.
-    if: ${{ github.event.inputs.only_triple == '' || github.event.inputs.only_triple == matrix.triple }}
+    needs: setup
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-22.04
-            triple: x86_64-unknown-linux-gnu
-            os: unix
-          - runner: ubuntu-22.04-arm
-            triple: aarch64-unknown-linux-gnu
-            os: unix
-          - runner: macos-14
-            triple: aarch64-apple-darwin
-            os: unix
-          - runner: macos-latest
-            triple: x86_64-apple-darwin
-            os: unix
-          # Pin to windows-2022 (VS2022 / v143 toolset). `windows-latest`
-          # rolls forward to newer images whose bundled CMake cannot
-          # auto-detect the installed Visual Studio, which fails configure
-          # with "could not find any instance of Visual Studio". Pinning the
-          # image plus passing an explicit --cmake_generator below makes the
-          # VS detection deterministic.
-          - runner: windows-2022
-            triple: x86_64-pc-windows-msvc
-            os: windows
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
     steps:
       - name: Checkout fono-voice (ops.config + this workflow)
         uses: actions/checkout@v4
