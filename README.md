@@ -131,6 +131,35 @@ Licensed **Apache-2.0** (upstream [`hexgrad/Kokoro-82M`](https://huggingface.co/
 | `bf_emma` | en_GB | female | `bf_emma.style.bin` |
 | `bm_lewis` | en_GB | male | `bm_lewis.style.bin` |
 
+## Wake-word models (openWakeWord)
+
+The [`ort-1.24.2`](https://github.com/bogdanr/fono-voice/releases/tag/ort-1.24.2)
+release also hosts the [**openWakeWord**](https://github.com/dscripka/openWakeWord)
+always-on wake-word stack, converted to `.ort` for the same minimal runtime:
+
+- two **shared, frozen** graphs used by every wake phrase — `melspectrogram.ort`
+  (audio → mel features) and `embedding.ort` (Google `speech_embedding`
+  backbone), both **Apache-2.0**; and
+- one small **per-phrase classifier** each: `hey_jarvis.ort`, `alexa.ort`,
+  `hey_mycroft.ort`.
+
+| Asset | Role | Upstream | License |
+|---|---|---|---|
+| `melspectrogram.ort` | shared mel front-end | openWakeWord v0.5.1 | Apache-2.0 |
+| `embedding.ort` | shared `speech_embedding` backbone | openWakeWord v0.5.1 | Apache-2.0 |
+| `hey_jarvis.ort` | "Hey Jarvis" classifier | openWakeWord v0.5.1 | CC-BY-NC-SA-4.0 ⚠️ |
+| `alexa.ort` | "Alexa" classifier | openWakeWord v0.5.1 | CC-BY-NC-SA-4.0 ⚠️ |
+| `hey_mycroft.ort` | "Hey Mycroft" classifier | openWakeWord v0.5.1 | CC-BY-NC-SA-4.0 ⚠️ |
+
+> `⚠️` The three pretrained **classifiers** are upstream openWakeWord models
+> licensed **CC-BY-NC-SA-4.0 (NonCommercial)** — the same author (David Scripka)
+> and license as upstream. CC-BY-NC-SA-4.0 **permits redistribution**, so these
+> `.ort` conversions are hosted here **with attribution, marked NonCommercial,
+> and shared under the same license**. They are fine for personal/offline use;
+> **do not** use them in a commercial deployment. The shared `melspectrogram`
+> and `embedding` graphs are Apache-2.0 and carry no such restriction. Fono
+> never bundles any of these in its binary — they are fetched on demand.
+
 > Some languages that Piper offers are intentionally **omitted** here because
 > their best voice uses ONNX control-flow operators (`If`) that the current
 > minimal runtime is not built with: Greek, Indonesian, Icelandic, Malayalam,
@@ -225,7 +254,7 @@ single license** — the current `ort-1.24.2` voices break down as:
 | CC-BY-SA-4.0 | 2 | yes, with attribution + share-alike |
 | Apache-2.0 | 6 | yes, with attribution |
 | MIT | 1 | yes |
-| CC-BY-NC-SA-4.0 | 4 | **non-commercial only** ⚠️ |
+| CC-BY-NC-SA-4.0 | 4 voices + 3 wake classifiers | **non-commercial only** ⚠️ |
 | CC-BY-NC-4.0 | 1 | **non-commercial only** ⚠️ |
 | See upstream MODEL_CARD | 7 | check the linked dataset URL |
 
@@ -237,6 +266,7 @@ The upstream families:
 |---|---|
 | Piper voices | [`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices) |
 | Kokoro voices | [`hexgrad/Kokoro-82M`](https://huggingface.co/hexgrad/Kokoro-82M) — Apache-2.0 |
+| openWakeWord wake models | [`dscripka/openWakeWord`](https://github.com/dscripka/openWakeWord) — code Apache-2.0; shared graphs Apache-2.0; pretrained classifiers CC-BY-NC-SA-4.0 ⚠️ |
 | Silero / Zipformer / KWS (planned) | per model (Apache-2.0 / MIT) |
 
 Conversion to `.ort` is a format change only; it does not alter the model's
