@@ -196,14 +196,82 @@ jobs:
           $libs = Get-ChildItem -Path "$build\MinSizeRel" -Recurse -Filter *.lib |
             Select-Object -ExpandProperty FullName
           if (-not $libs) { throw "no .lib files found under $build" }
-          $libExe = (Get-Command lib.exe -ErrorAction SilentlyContinue)
+
+          # Locate lib.exe (already on PATH inside a VS dev shell; else resolve
+          # it from the toolchain).
+          $libExe = (Get-Command lib.exe -ErrorAction SilentlyContinue).Source
           if (-not $libExe) {
-            # Locate lib.exe from the VS toolchain if not already on PATH.
             $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-            $vs = & $vswhere -latest -products * -find "VC\Tools\MSVC\*\bin\Hostx64\x64\lib.exe" | Select-Object -First 1
-            $libExe = $vs
+            $libExe = & $vswhere -latest -products * -find "VC\Tools\MSVC\*\bin\Hostx64\x64\lib.exe" | Select-Object -First 1
           }
-          & $libExe /OUT:"$out\onnxruntime.lib" @libs
+          if (-not $libExe) { throw "lib.exe not found" }
+
+          # Do NOT merge with a plain `lib.exe /OUT @libs`. That was tried and
+          # produces a subtly broken archive because the same object basename
+          # occurs in more than one input lib (e.g. onnx-data.pb.obj lives in
+          # both onnx.lib and onnx_proto.lib) and because onnxruntime embeds a
+          # Windows resource (version.res) as an archive member. `lib.exe`
+          # keeps duplicate member NAMES verbatim; MSVC's on-demand symbol
+          # resolution then pulls the wrong same-named member and reports
+          # LNK1120 unresolved externals for symbols that are physically
+          # present, while /WHOLEARCHIVE trips over the duplicate resource with
+          # a fatal LNK1241. macOS avoids all of this because `libtool -static`
+          # de-duplicates members; GNU `ar` on Linux is offset-indexed so
+          # duplicate names are harmless. To get the same clean result on
+          # Windows we reconstruct the archive from its object members:
+          # extract every .obj under a guaranteed-unique name (skipping .res
+          # and any non-object member), then re-archive. Duplicate object
+          # CONTENT is harmless — the final link folds/ignores the redundant
+          # definition (LNK4006 at worst) — but duplicate NAMES are not, so the
+          # per-member unique naming is the whole point.
+          $stage = "$build\merge-stage"
+          Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+          $objList = New-Object System.Collections.Generic.List[string]
+          $li = 0
+          foreach ($lib in $libs) {
+            $li++
+            # /LIST prints one member per line, exactly as stored in the archive.
+            $members = & $libExe /NOLOGO /LIST $lib
+            $mi = 0
+            foreach ($m in $members) {
+              $m = "$m".Trim()
+              if (-not $m) { continue }
+              $base = Split-Path $m -Leaf
+              if ($base -notmatch '\.obj$') { continue }   # drop version.res etc.
+              $mi++
+              $dest = Join-Path $stage ("{0:D3}_{1:D5}_{2}" -f $li, $mi, $base)
+              & $libExe /NOLOGO "/EXTRACT:$m" "/OUT:$dest" $lib
+              if ($LASTEXITCODE -ne 0) { throw "extract failed for '$m' in $lib" }
+              if (Test-Path $dest) { $objList.Add($dest) }
+            }
+          }
+          if ($objList.Count -eq 0) { throw "no object members extracted from the input libs" }
+          Write-Host "extracted $($objList.Count) object members from $($libs.Count) input libraries"
+
+          # Re-archive from the uniquely-named objects via a response file
+          # (the object count is in the thousands, well past the command-line
+          # length limit).
+          $rsp = "$build\merge.rsp"
+          "/OUT:`"$out\onnxruntime.lib`"" | Set-Content -Encoding ascii $rsp
+          foreach ($o in $objList) { "`"$o`"" | Add-Content -Encoding ascii $rsp }
+          & $libExe /NOLOGO "@$rsp"
+          if ($LASTEXITCODE -ne 0) { throw "lib.exe archive step failed" }
+
+          # Verify the merged archive: every member must be a .obj and every
+          # member name must be unique. This is the gate that guarantees the
+          # two historical defects (duplicate member names, stray resource
+          # members) can never be published again — if either recurs the
+          # workflow fails here instead of shipping a broken library.
+          $outMembers = (& $libExe /NOLOGO /LIST "$out\onnxruntime.lib") |
+            ForEach-Object { "$_".Trim() } | Where-Object { $_ } |
+            ForEach-Object { Split-Path $_ -Leaf }
+          $nonObj = $outMembers | Where-Object { $_ -notmatch '\.obj$' }
+          if ($nonObj) { throw "merged archive contains non-object members: $($nonObj -join ', ')" }
+          $dupes = $outMembers | Group-Object | Where-Object { $_.Count -gt 1 }
+          if ($dupes) { throw "merged archive has duplicate member names: $(($dupes | ForEach-Object { $_.Name }) -join ', ')" }
+          Write-Host "verified merged onnxruntime.lib: $($outMembers.Count) unique object members, no resources"
 
       # --- Compress + name the asset per scripts/fetch-onnxruntime.sh --------
       # Compress with Python's stdlib lzma (already installed on every runner)
