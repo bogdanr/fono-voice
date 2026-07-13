@@ -152,8 +152,21 @@ jobs:
           # --cmake_generator is explicit: on newer runner images the default
           # generator detection fails ("could not find any instance of Visual
           # Studio"). "Visual Studio 17 2022" matches the v143 toolset on the
-          # windows-2022 image and keeps the multi-config build layout
-          # ($build\MinSizeRel\MinSizeRel\...) the merge step below expects.
+          # windows-2022 image.
+          #
+          # Build flags mirror the Unix scripts/build-onnxruntime-minimal.sh so
+          # the Windows archive matches the same ort-sys ABI surface:
+          #   --disable_exceptions --disable_rtti : C++ size shave (minimal
+          #       build only); the Unix recipe uses both, so Windows must too.
+          #   XNNPACK is intentionally NOT enabled: the voice models are all
+          #       CPU-realtime without it, and enabling it dragged in extra
+          #       FetchContent deps (cpuinfo/pthreadpool/xnnpack) for no gain.
+          #   CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= (empty): stop MSVC from
+          #       embedding CodeView debug records (.debug$S/.debug$T) into
+          #       every object. Those records are ~70% of each object and
+          #       ballooned the archive to ~343 MiB (vs ~54 MiB on Linux, which
+          #       compiles without -g); they are link-time discardable and
+          #       never reach the final fono binary.
           python "$src\tools\ci_build\build.py" `
             --build_dir $build `
             --config MinSizeRel `
@@ -162,16 +175,25 @@ jobs:
             --compile_no_warning_as_error `
             --minimal_build `
             --disable_ml_ops `
+            --disable_exceptions `
             --disable_rtti `
             --enable_reduced_operator_type_support `
             --include_ops_by_config $ops `
-            --use_xnnpack `
             --cmake_generator "Visual Studio 17 2022" `
             --cmake_extra_defines CMAKE_SKIP_INSTALL_RULES=ON `
-            --cmake_extra_defines FETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER
+            --cmake_extra_defines FETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER `
+            --cmake_extra_defines CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=
 
           # Merge every static .lib the build emitted into one onnxruntime.lib.
-          $libs = Get-ChildItem -Path "$build\MinSizeRel\MinSizeRel" -Recurse -Filter *.lib |
+          # Search the WHOLE $build\MinSizeRel tree, not just the main project's
+          # $build\MinSizeRel\MinSizeRel\ output dir: CMake FetchContent places
+          # the dependency libraries (onnx, onnx_proto, protobuf-lite, abseil,
+          # re2, flatbuffers, cpuinfo, ...) under $build\MinSizeRel\_deps\...
+          # A glob that only looked at the main output dir silently dropped
+          # those deps, producing an incomplete archive that failed downstream
+          # with LNK1120 unresolved externals. This mirrors the Unix script's
+          # `find "$BUILD_DIR/MinSizeRel" -name '*.a'`.
+          $libs = Get-ChildItem -Path "$build\MinSizeRel" -Recurse -Filter *.lib |
             Select-Object -ExpandProperty FullName
           if (-not $libs) { throw "no .lib files found under $build" }
           $libExe = (Get-Command lib.exe -ErrorAction SilentlyContinue)
