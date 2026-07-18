@@ -1466,8 +1466,8 @@
           "embedding_dim": 192,
           "opset": 17,
           "sample_rate": 16000,
-          "status": "staged",
-          "note": "Converted and validated locally; runtime rebuild + release upload pending. The .ort size/sha256 are for the locally converted artifact and are reproducible from the pinned .pt via torch.onnx.export (opset 17, dynamo=False) + scripts/gen-ort-models.sh on onnxruntime 1.24.2. The cohort sidecar is not yet generated (Slice 4/5).",
+          "status": "hosted",
+          "note": "Hosted on the ort-1.24.2 release; the minimal runtime was rebuilt from the unioned onnxruntime/ops.config and republished, and the .ort size/sha256 match the published bytes (reproducible from the pinned .pt via torch.onnx.export (opset 17, dynamo=False) + scripts/gen-ort-models.sh on onnxruntime 1.24.2). The AS-Norm cohort sidecar is not yet generated (Slice 4/5).",
           "frontend": {
             "type": "tf-melbanks",
             "n_fft": 512,
@@ -1519,8 +1519,8 @@
           "embedding_dim": 192,
           "opset": 17,
           "sample_rate": 16000,
-          "status": "staged",
-          "note": "Operator-identical to redimnet2-b3, so the same minimal runtime loads both tiers. Converted and validated locally; runtime rebuild + release upload pending. The cohort sidecar is not yet generated (Slice 4/5).",
+          "status": "hosted",
+          "note": "Operator-identical to redimnet2-b3, so the same rebuilt minimal runtime loads both tiers. Hosted on the ort-1.24.2 release; the .ort size/sha256 match the published bytes. The cohort sidecar is not yet generated (Slice 4/5).",
           "frontend": {
             "type": "tf-melbanks",
             "n_fft": 512,
