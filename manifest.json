@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "description": "Index of pre-converted ONNX Runtime (.ort) voice models hosted by fono-voice. Models are published as GitHub release assets tagged by ONNX Runtime ABI version; this file is the canonical machine-readable catalog. Two engines are indexed: Piper VITS voices (one .ort model + .onnx.json config sidecar each) and Kokoro voices (English; all share one kokoro-v1.0-q8f16.ort model and carry a per-voice 510x256 f32 .style.bin voice pack, byte-identical to the upstream onnx-community/Kokoro-82M-v1.0-ONNX voice tensors). Kokoro entries add a 'gender' field. Per-voice license is taken from the upstream MODEL_CARD (Piper) or the upstream model card (Kokoro is Apache-2.0); check it before commercial use (some Piper voices are non-commercial).",
+  "description": "Index of pre-converted ONNX Runtime (.ort) voice models hosted by fono-voice. Models are published as GitHub release assets tagged by ONNX Runtime ABI version; this file is the canonical machine-readable catalog. Two engines are indexed: Piper VITS voices (one .ort model + .onnx.json config sidecar each) and Kokoro voices (English; all share one kokoro-v1.0-q8f16.ort model and carry a per-voice 510x256 f32 .style.bin voice pack, byte-identical to the upstream onnx-community/Kokoro-82M-v1.0-ONNX voice tensors). Kokoro entries add a 'gender' field. Per-voice license is taken from the upstream MODEL_CARD (Piper) or the upstream model card (Kokoro is Apache-2.0); check it before commercial use (some Piper voices are non-commercial). A third section, 'speaker_models', indexes ReDimNet2 speaker-verification embedding graphs (redimnet2-b3 default, redimnet2-b6 max tier; PalabraAI, MIT, opset 17, 192-dim embedding) each with a 'frontend' fbank spec and a pending AS-Norm 'cohort' sidecar; these are self-exported from the upstream .pt and require the unioned onnxruntime/ops.config minimal-runtime rebuild.",
   "repo": "bogdanr/fono-voice",
   "asset_url_template": "https://github.com/bogdanr/fono-voice/releases/download/{release_tag}/{file}",
   "ort_abi_versions": {
@@ -1452,6 +1452,114 @@
             "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/chaowen/medium/zh_CN-chaowen-medium.onnx",
             "onnx_sha256": "820d64ac16048fbcf38dd0823d37fab5f5e0c2bd71b01ca5a50f553fac19e746",
             "dataset_url": "https://github.com/OHF-Voice/voice-datasets"
+          }
+        }
+      ],
+      "speaker_models": [
+        {
+          "name": "redimnet2-b3",
+          "engine": "redimnet2",
+          "task": "speaker-verification",
+          "tier": "default",
+          "params_millions": 4.1,
+          "gmacs": 2.7,
+          "embedding_dim": 192,
+          "opset": 17,
+          "sample_rate": 16000,
+          "status": "staged",
+          "note": "Converted and validated locally; runtime rebuild + release upload pending. The .ort size/sha256 are for the locally converted artifact and are reproducible from the pinned .pt via torch.onnx.export (opset 17, dynamo=False) + scripts/gen-ort-models.sh on onnxruntime 1.24.2. The cohort sidecar is not yet generated (Slice 4/5).",
+          "frontend": {
+            "type": "tf-melbanks",
+            "n_fft": 512,
+            "win_length": 400,
+            "hop_length": 160,
+            "window": "hann",
+            "n_mels": 72,
+            "f_min": 20,
+            "f_max": 7600,
+            "mel_scale": "htk",
+            "spectrum": "power",
+            "log": true,
+            "preemphasis": 0.97,
+            "cmn": "per-utterance"
+          },
+          "license": "MIT",
+          "files": {
+            "model": {
+              "name": "redimnet2-b3.ort",
+              "size": 19663192,
+              "sha256": "7bb30475c5924b525b6684a00ff768aa9185f69e6265d5ff9653a48d70eee0e2"
+            },
+            "cohort": {
+              "name": "redimnet2-b3.cohort.bin",
+              "size": null,
+              "sha256": null,
+              "status": "pending",
+              "note": "AS-Norm impostor cohort embeddings; generated in Slice 4/5, not yet produced."
+            }
+          },
+          "source": {
+            "upstream": "PalabraAI/redimnet2",
+            "pt_url": "https://github.com/PalabraAI/redimnet2/releases/download/v1.0.0/b3-vb2+vox2+cnc2_v0-lm.pt",
+            "pt_sha256": "b64989536ef8822447d72517ad9019b870a951e85a3f176f0ed42d2a4c3d811d",
+            "onnx_export": "self-exported via torch.onnx.export (opset 17, dynamo=False); waveform input [N,T], dynamic time axis",
+            "onnx_sha256": "4eb7a611560698d5a871d7a26c34fd0393e63f1151fc4de46d623276bc3b57e9",
+            "train_dataset": "vb2+vox2+cnc2_v0",
+            "train_type": "lm",
+            "dataset_url": "https://github.com/PalabraAI/redimnet2"
+          }
+        },
+        {
+          "name": "redimnet2-b6",
+          "engine": "redimnet2",
+          "task": "speaker-verification",
+          "tier": "max",
+          "params_millions": 12.3,
+          "gmacs": 13.05,
+          "embedding_dim": 192,
+          "opset": 17,
+          "sample_rate": 16000,
+          "status": "staged",
+          "note": "Operator-identical to redimnet2-b3, so the same minimal runtime loads both tiers. Converted and validated locally; runtime rebuild + release upload pending. The cohort sidecar is not yet generated (Slice 4/5).",
+          "frontend": {
+            "type": "tf-melbanks",
+            "n_fft": 512,
+            "win_length": 400,
+            "hop_length": 160,
+            "window": "hann",
+            "n_mels": 72,
+            "f_min": 20,
+            "f_max": 7600,
+            "mel_scale": "htk",
+            "spectrum": "power",
+            "log": true,
+            "preemphasis": 0.97,
+            "cmn": "per-utterance"
+          },
+          "license": "MIT",
+          "files": {
+            "model": {
+              "name": "redimnet2-b6.ort",
+              "size": 51493376,
+              "sha256": "903015c8f462c98b28ec361f2a774bd00b3acbb4086b83b8c3b04824cd26f087"
+            },
+            "cohort": {
+              "name": "redimnet2-b6.cohort.bin",
+              "size": null,
+              "sha256": null,
+              "status": "pending",
+              "note": "AS-Norm impostor cohort embeddings; generated in Slice 4/5, not yet produced."
+            }
+          },
+          "source": {
+            "upstream": "PalabraAI/redimnet2",
+            "pt_url": "https://github.com/PalabraAI/redimnet2/releases/download/v1.0.0/b6-vb2+vox2+cnc2_v0-lm.pt",
+            "pt_sha256": "287365f6f485b19e65e5176554f8f7123bfa8d85185f3d2c040eab51acec9868",
+            "onnx_export": "self-exported via torch.onnx.export (opset 17, dynamo=False); waveform input [N,T], dynamic time axis",
+            "onnx_sha256": "f465ebb5c8added35a78c55cb119194658030a5171faa3775f54cd132ab74b7b",
+            "train_dataset": "vb2+vox2+cnc2_v0",
+            "train_type": "lm",
+            "dataset_url": "https://github.com/PalabraAI/redimnet2"
           }
         }
       ]
