@@ -1467,7 +1467,7 @@
           "opset": 17,
           "sample_rate": 16000,
           "status": "hosted",
-          "note": "Hosted on the ort-1.24.2 release; the minimal runtime was rebuilt from the unioned onnxruntime/ops.config and republished, and the .ort size/sha256 match the published bytes (reproducible from the pinned .pt via torch.onnx.export (opset 17, dynamo=False) + scripts/gen-ort-models.sh on onnxruntime 1.24.2). The AS-Norm cohort sidecar is not yet generated (Slice 4/5).",
+          "note": "Hosted on the ort-1.24.2 release; the minimal runtime was rebuilt from the unioned onnxruntime/ops.config and republished, and the .ort size/sha256 match the published bytes (reproducible from the pinned .pt via torch.onnx.export (opset 17, dynamo=False) + scripts/gen-ort-models.sh on onnxruntime 1.24.2). The AS-Norm cohort sidecar is hosted alongside (see files.cohort).",
           "frontend": {
             "type": "tf-melbanks",
             "n_fft": 512,
@@ -1492,10 +1492,10 @@
             },
             "cohort": {
               "name": "redimnet2-b3.cohort.bin",
-              "size": null,
-              "sha256": null,
-              "status": "pending",
-              "note": "AS-Norm impostor cohort embeddings; generated in Slice 4/5, not yet produced."
+              "size": 460808,
+              "sha256": "3562c1c29c0e11ddbb4c72d392e104aeab1192e650bdd12d16214af3f52bc091",
+              "status": "hosted",
+              "note": "AS-Norm impostor cohort: 600 speakers (u32 rows + u32 dim=192 + f32le row-major matrix), one mean-of-normalised-clips embedding per speaker, embedded through redimnet2-b3.ort on onnxruntime 1.24.2. Source audio: Mozilla Common Voice cv-corpus-17.0-2024-03-15 (CC0), dev+test splits, stratified ro=130 en=150 de/fr/es/it=80; exact clip selection pinned in the fono repo at calibration/speaker-cohort/selection.tsv (regenerate with scripts/gen-speaker-cohort.py). No audio is redistributed, only derived embeddings."
             }
           },
           "source": {
@@ -1520,7 +1520,7 @@
           "opset": 17,
           "sample_rate": 16000,
           "status": "hosted",
-          "note": "Operator-identical to redimnet2-b3, so the same rebuilt minimal runtime loads both tiers. Hosted on the ort-1.24.2 release; the .ort size/sha256 match the published bytes. The cohort sidecar is not yet generated (Slice 4/5).",
+          "note": "Operator-identical to redimnet2-b3, so the same rebuilt minimal runtime loads both tiers. Hosted on the ort-1.24.2 release; the .ort size/sha256 match the published bytes. The AS-Norm cohort sidecar is hosted alongside (see files.cohort).",
           "frontend": {
             "type": "tf-melbanks",
             "n_fft": 512,
@@ -1545,10 +1545,10 @@
             },
             "cohort": {
               "name": "redimnet2-b6.cohort.bin",
-              "size": null,
-              "sha256": null,
-              "status": "pending",
-              "note": "AS-Norm impostor cohort embeddings; generated in Slice 4/5, not yet produced."
+              "size": 460808,
+              "sha256": "ee2877a2f56ad7d04f9e6b9011f89cd3bca0d11889f407d8175aecc55b8f6d5c",
+              "status": "hosted",
+              "note": "AS-Norm impostor cohort: the same 600-speaker Common Voice (CC0) selection as redimnet2-b3.cohort.bin, embedded through redimnet2-b6.ort. See the b3 cohort note for full provenance; selection pinned in the fono repo at calibration/speaker-cohort/selection.tsv."
             }
           },
           "source": {
